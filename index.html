@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Don't Look</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            overflow: hidden; /* Hide scrollbars */
+            cursor: none; /* Hide mouse cursor for immersion */
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="creepyCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('creepyCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Resize canvas to fill screen
+    let width = canvas.width = window.innerWidth;
+    let height = canvas.height = window.innerHeight;
+
+    window.addEventListener('resize', () => {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+    });
+
+    // --- CONFIGURATION ---
+    
+    // Generate a random IP address
+    const fakeIP = `${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}.${Math.floor(Math.random()*255)}`;
+
+    const messages = [
+        "I am always here",
+        "Always watching",
+        "Right here with you",
+        `${fakeIP}`, // Removed "IP:" prefix, just the numbers
+        "See you soon ;)"
+    ];
+
+    // State variables
+    let currentMessageIndex = 0;
+    let textAlpha = 0;
+    let fadeDirection = 1; // 1 = in, -1 = out
+    let holdTimer = 0;
+    
+    // --- UPDATED SPEEDS ---
+    const holdDuration = 50; // Reduced from 120 (faster hold)
+    const fadeSpeed = 0.02; // Increased from 0.005 (faster fade)
+
+    // Jumpscare/Flash variables
+    let flashOpacity = 0; // For lightning
+    let scareActive = false; 
+    let scareTimer = 0;
+
+    // --- UTILITIES ---
+
+    function randomInt(min, max) {
+        return Math.floor(Math.random() * (max - min + 1) + min);
+    }
+
+    // --- DRAWING FUNCTIONS ---
+
+    function drawNoise() {
+        // Draw static grain
+        const w = canvas.width;
+        const h = canvas.height;
+        const idata = ctx.createImageData(w, h);
+        const buffer32 = new Uint32Array(idata.data.buffer);
+        const len = buffer32.length;
+
+        // Only draw noise on some pixels to save performance
+        for (let i = 0; i < len; i += 4) {
+            if (Math.random() < 0.1) {
+                buffer32[i] = 0xff111111; // Dark grey noise
+            }
+        }
+        ctx.putImageData(idata, 0, 0);
+    }
+
+    function drawText() {
+        if (currentMessageIndex >= messages.length) return; // Sequence done
+
+        const text = messages[currentMessageIndex];
+        
+        ctx.font = "30px 'Courier New', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        // Glitch effect: Randomly offset x/y slightly
+        const jitterX = randomInt(-2, 2);
+        const jitterY = randomInt(-2, 2);
+
+        // Draw Text
+        ctx.fillStyle = `rgba(200, 200, 200, ${textAlpha})`;
+        ctx.fillText(text, (width / 2) + jitterX, (height / 2) + jitterY);
+
+        // Update Alpha / Sequence Logic
+        if (!scareActive) { // Don't progress text logic during a jumpscare
+            if (fadeDirection === 1) {
+                textAlpha += fadeSpeed;
+                if (textAlpha >= 1) {
+                    textAlpha = 1;
+                    fadeDirection = 0; // Stop fading, start holding
+                    holdTimer = holdDuration;
+                }
+            } else if (fadeDirection === 0) {
+                holdTimer--;
+                if (holdTimer <= 0) {
+                    fadeDirection = -1; // Start fading out
+                }
+            } else if (fadeDirection === -1) {
+                textAlpha -= fadeSpeed;
+                if (textAlpha <= 0) {
+                    textAlpha = 0;
+                    fadeDirection = 1;
+                    currentMessageIndex = (currentMessageIndex + 1) % messages.length; 
+                }
+            }
+        }
+    }
+
+    function drawLightning() {
+        if (flashOpacity > 0) {
+            ctx.fillStyle = `rgba(255, 255, 255, ${flashOpacity})`;
+            ctx.fillRect(0, 0, width, height);
+            flashOpacity -= 0.1; // Fade out lightning quickly
+        }
+
+        // Randomly trigger lightning (1 in 300 chance per frame)
+        if (Math.random() < 0.003) {
+            flashOpacity = 1.0;
+        }
+    }
+
+    function drawJumpscare() {
+        // Randomly trigger jumpscare
+        if (!scareActive && Math.random() < 0.002) { // Slightly increased chance for testing
+            scareActive = true;
+            scareTimer = 10; // Lasts 10 frames (very fast flash)
+        }
+
+        if (scareActive) {
+            // Fill background red or black randomly
+            ctx.fillStyle = Math.random() > 0.5 ? '#500' : '#000';
+            ctx.fillRect(0, 0, width, height);
+
+            // Draw Big Scary Text
+            ctx.font = "bold 90px Courier";
+            ctx.fillStyle = "red";
+            ctx.textAlign = "center";
+            
+            // Violent shake
+            const shakeX = randomInt(-50, 50);
+            const shakeY = randomInt(-50, 50);
+            
+            ctx.save();
+            ctx.translate(width/2 + shakeX, height/2 + shakeY);
+            ctx.rotate((Math.random() - 0.5) * 0.5); // Slight rotation
+            
+            // --- UPDATED JUMPSCARE TEXT ---
+            ctx.fillText(fakeIP, 0, 0); // Shows just the IP numbers
+            
+            ctx.restore();
+
+            scareTimer--;
+            if (scareTimer <= 0) {
+                scareActive = false;
+            }
+        }
+    }
+
+    // --- MAIN LOOP ---
+
+    function loop() {
+        // 1. Clear Screen
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, width, height);
+
+        // 2. Draw Effects
+        drawNoise(); // Static grain background
+        
+        // 3. Draw Main Sequence
+        drawText();
+
+        // 4. Draw Overlays (Lightning / Scares)
+        drawLightning();
+        drawJumpscare(); // This draws on top of everything else
+
+        requestAnimationFrame(loop);
+    }
+
+    // Start
+    loop();
+
+</script>
+</body>
+</html>
